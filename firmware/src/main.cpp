@@ -9,12 +9,14 @@
 #include "I2SOutput.h"
 #include "config.h"
 #include "Application.h"
-#include "SPIFFS.h"
+#include "LittleFS.h"
 #include "IntentProcessor.h"
 #include "Speaker.h"
 #include "IndicatorLight.h"
 #include "AudioKitHAL.h"
 #include "OpenAILLM.h"
+#include "SkillRegistry.h"
+#include "LedSkillHandler.h"
 
 // i2s config for using the internal ADC
 i2s_config_t adcI2SConfig = {
@@ -282,7 +284,7 @@ static void processTtsUartCommand(const String &line)
 /**
  * Tool handler callback for chatV3.
  * Parses "<tool> filename content" from the LLM reply.
- * Does NOT actually write to SPIFFS – just logs and returns success feedback.
+ * Does NOT actually write to LittleFS – just logs and returns success feedback.
  * Returns empty String if no tool call is detected.
  */
 static String llmToolHandler(const String &reply)
@@ -525,8 +527,8 @@ void setup()
   Serial.printf("Internal heap largest block: %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
   Serial.printf("Chip model: %s\n", ESP.getChipModel());
 
-  // startup SPIFFS for the wav files
-  SPIFFS.begin();
+  // startup LittleFS for the wav files
+  LittleFS.begin();
   // make sure we don't get killed for our long running tasks
   esp_task_wdt_init(10, false);
 
@@ -551,6 +553,18 @@ void setup()
   // indicator light to show when we are listening
   IndicatorLight *indicator_light = new IndicatorLight();
   g_indicatorLight = indicator_light;
+
+  // --- Skill system initialization ---
+  // 1. Scan LittleFS for skill definitions (SKILL.md files)
+  int skillCount = SkillRegistry::instance().scanDirectory("/skills");
+  Serial.printf("Loaded %d skill(s) from LittleFS\n", skillCount);
+
+  // 2. Register C++ hardware handlers
+  registerLedHandlers(SkillRegistry::instance(), indicator_light);
+
+  // 3. Connect skill registry to LLM
+  g_llm->setSkillRegistry(&SkillRegistry::instance());
+  Serial.println("Skill system initialized.");
 
   // and the intent processor
   IntentProcessor *intent_processor = new IntentProcessor(speaker);
