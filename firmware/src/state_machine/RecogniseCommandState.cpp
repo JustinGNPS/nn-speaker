@@ -94,8 +94,6 @@ bool RecogniseCommandState::run()
         m_start_time = current_time;
         if (m_elapsed_time > 3000)
         {
-            // indicate that we are now trying to understand the command
-            m_indicator_light->setState(PULSING);
 
             // all done, move to next state
             Serial.println("3 seconds has elapsed - finishing recognition request");
